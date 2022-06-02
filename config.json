@@ -1,0 +1,20 @@
+{
+  "notificationUrl": "<url>",
+  "notificationTimeout": 10000,
+  "targets": [
+    {
+      "name": "Example",
+      "url": "http://example.com",
+      "init": {},
+      "expectedStatus": 200,
+      "expectedHeaders": {
+        "Content-Type": "text/html; charset=UTF-8"
+      },
+      "maxResponseTime": 500,
+      "timeout": 1000,
+      "retries": 3,
+      "truncateBody": 200,
+      "notificationCooldownMins": 5
+    }
+  ]
+}
