@@ -31,7 +31,7 @@ config.json
 }
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-// Result failure types:
+// Result failure types in order of precedence:
 //  TIMEOUT - no response in time
 //  STATUS - response had incorrect status code
 //  HEADERS - response missing header, or incorrect value
@@ -99,7 +99,7 @@ async function ensureDir(dirpath) {
   try {
     await fs.mkdir(dirpath, { recursive: true })
   } catch (err) {
-    LOGGER.error(err.stack)
+    LOGGER.error(err.message)
   }
 }
 
@@ -117,7 +117,7 @@ async function read(filepath) {
     return await fs.readFile(filepath, { encoding: 'utf-8' })
   } catch (err) {
     LOGGER.error(`Failed to read "${path.parse(filepath).base}"`)
-    LOGGER.error(err.stack)
+    LOGGER.error(err.message)
     return null
   }
 }
@@ -127,7 +127,7 @@ async function write(filepath, data, flag='a') {
     await fs.writeFile(filepath, data, { flag, encoding: 'utf-8' })
   } catch (err) {
     LOGGER.error(`Failed to write "${path.parse(filepath).base}"`)
-    LOGGER.error(err.stack)
+    LOGGER.error(err.message)
   }
 }
 
@@ -139,7 +139,7 @@ async function readJSON(filepath) {
     return JSON.parse(data)
   } catch (err) {
     LOGGER.error(`Failed to parse "${path.parse(filepath).base}"`)
-    LOGGER.error(err.stack)
+    LOGGER.error(err.message)
     return null
   }
 }
@@ -199,7 +199,7 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
       failed || fail({
         type: 'STATUS',
         description: `Didn't respond with status ${expect.status}`,
-        body: (truncateBody && text.length > truncateBody) ? `${text.slice(0, truncateBody)}...` : text
+        body: (truncateBody && text.length > truncateBody) ? `${text.slice(0, truncateBody)}...[truncated]` : text
       })
     }
 
@@ -228,7 +228,7 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
       })
 
     } else {
-      LOGGER.error(err.stack)
+      LOGGER.error(err.message)
     }
 
   } finally {
@@ -262,7 +262,7 @@ async function notify(target, result) {
 
     } catch (err) {
       LOGGER.error('Failed to send notification')
-      LOGGER.error(err)
+      LOGGER.error(err.message)
     }
 
   } else {
@@ -325,21 +325,24 @@ for (let filepath of [LOG_FILEPATH, WARN_FILEPATH, DATA_FILEPATH]) {
   await ensureDir(path.parse(filepath).dir)
 }
 
+// -----------------------------------------------------------------------------
+
 const CONFIG = await readJSON(CONFIG_FILEPATH)
 try {
-  if (!CONFIG || typeof CONFIG !== 'object') throw 'config must be an object'
-  if (!('targets' in CONFIG || Array.isArray(CONFIG.targets))) throw 'config must have "targets" array'
+  if (!CONFIG || typeof CONFIG !== 'object') throw 'Config must be an object'
+  if (!('targets' in CONFIG || Array.isArray(CONFIG.targets))) throw 'Config must have "targets" array'
   const usedNames = new Set()
   CONFIG.targets.forEach(target => {
-    if (typeof target !== 'object') throw 'each target must be an object'
-    if (!('name' in target || typeof target.name !== 'string')) throw 'each target must have a unique "name" string'
-    if (usedNames.has(target.name)) throw `target name "${target.name}" not unique`
+    if (typeof target !== 'object') throw 'Each target must be an object'
+    if (!('name' in target && typeof target.name === 'string')) throw 'Each target must have a unique "name" string'
+    if (!('url' in target && typeof target.url === 'string')) throw 'Each target must have a "url" string'
+    if (usedNames.has(target.name)) throw `Target name "${target.name}" not unique`
     usedNames.add(target.name)
   })
-  if (!('notifier' in CONFIG)) throw 'must have "notifier" object'
-  if ('notifier' in CONFIG && !('url' in CONFIG.notifier)) throw 'notifier must have a "url" string'
+  if (!('notifier' in CONFIG)) throw 'Must have "notifier" object'
+  if ('notifier' in CONFIG && !('url' in CONFIG.notifier)) throw 'Notifier must have a "url" string'
 } catch (err) {
-  LOGGER.error(`Invalid config: ${err}`)
+  LOGGER.error(`INVALID CONFIG! ${err}`)
   await LOGGER.flush()
   process.exit(1)
 }
@@ -350,11 +353,11 @@ const DEFAULTS = {
     expect: {
       status: 200,
       headers: {},
-      responseTime: 2000,
+      responseTime: 1000,
     },
     responseTimeRetries: 0,
-    timeout: 5000,
-    notifierCooldownMins: 1,
+    timeout: 5 * 1000,
+    notifierCooldownMins: 0,
     truncateBody: 1000,
   },
   notifier: {
@@ -373,20 +376,20 @@ if ('notifier' in CONFIG) {
   mergeObj(CONFIG.notifier, notifierConfig)
   mergeObj(CONFIG.notifier, DEFAULTS.notifier)
 }
-if ('notifiers' in CONFIG) {
-  for (let notifier of CONFIG.notifiers) {
-    mergeObj(notifier, notifierConfig)
-    mergeObj(notifier, DEFAULTS.notifier)
-  }
-}
+// if ('notifiers' in CONFIG) {
+//   for (let notifier of CONFIG.notifiers) {
+//     mergeObj(notifier, notifierConfig)
+//     mergeObj(notifier, DEFAULTS.notifier)
+//   }
+// }
+
+// -----------------------------------------------------------------------------
 
 let lastState = {}
 if (await exists(STATE_FILEPATH)) {
   lastState = await readJSON(STATE_FILEPATH)
 }
 const STATE = { lastNotificationTime: {}, ...lastState }
-
-// -----------------------------------------------------------------------------
 
 for (let target of CONFIG.targets) {
   let result = await poke(target)
