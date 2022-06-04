@@ -1,7 +1,32 @@
 # Ping and Ding
-...
+A simple website and endpoint monitor. 
 
 <br>
+
+
+## Contents
+* [Overview](#overview)
+* [Installation](#installation)
+* [Setup](#setup)
+* [Usage](#usage)
+* [Config](#config)
+* [Results](#results)
+
+<br>
+
+
+## Overview
+Ping and Ding has two main functionalities:
+1.  *Ping!* – Request an HTTP resource, log results
+2.  *Ding!* - Notify if response doesn't meet expectations
+
+### Ping
+Specify targets to be requested in the `config.json` file, as well as criteria of the expected response, namely the status, headers, and response time.
+
+The script requests each resource and checks the response against the expected criteria, notifying if they are not met.
+
+### Ding
+Notifications are sent through Slack using a web-hook. Here's an example message that you could see in your Slack channel:
 
 **Example RESPONSE_TIME Failure**<br>
 *Response took longer than 30ms*<br>
@@ -50,10 +75,16 @@ Open the crontab file for editing (you might need sudo)
 $ crontab -e
 ```
 
-Add the following line, substituting your path to `ping-and-ding.js`. This will call the script each minute (use `*/5 * * * *` for every 5 minutes, `0 * * * *` for every hour).
+Add the following line, substituting your path to `ping-and-ding.js`.
 ```
 * * * * * node /your/path/to/ping-and-ding.js
 ```
+This will call the script each minute. For help building cron schedule expressions check out [this site](https://crontab.guru/).
+
+Example cron schedule expressions
+* `*/5 * * * *` (every 5 minutes)
+* `0,10,20,30,40,50 * * * *` (every 10 minutes)
+* `0 * * * *` (every hour)
 
 <br>
 
