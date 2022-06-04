@@ -6,7 +6,7 @@ config.json
   "targets": [
     {
       "name": <str>, // required, unique
-      "url": <str>, // required, unique
+      "url": <str>, // required
       "init": {}, // fetch params
       "expect": {
         "status": <num>, // status code

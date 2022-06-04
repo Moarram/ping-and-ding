@@ -1,14 +1,13 @@
 # Ping and Ding
-A simple website and endpoint monitor. 
-
-<br>
-
+*A simple monitor for websites and endpoints*
 
 ## Contents
 * [Overview](#overview)
-* [Installation](#installation)
 * [Setup](#setup)
-* [Usage](#usage)
+  * [Installation](#installation)
+  * [Usage](#usage)
+  * [Slack](#slack)
+  * [Cron](#cron)
 * [Config](#config)
 * [Results](#results)
 
@@ -16,17 +15,13 @@ A simple website and endpoint monitor.
 
 
 ## Overview
-Ping and Ding has two main functionalities:
-1.  *Ping!* – Request an HTTP resource, log results
-2.  *Ding!* - Notify if response doesn't meet expectations
+Ping and Ding has two main tasks:
+1. Ping (request an HTTP resource)
+1. Ding (notify if response doesn't meet expectations)
 
-### Ping
-Specify targets to be requested in the `config.json` file, as well as criteria of the expected response, namely the status, headers, and response time.
+The `config.json` file specifies targets: each being a resource to request with expected response attributes (status, headers, and response time).
 
-The script requests each resource and checks the response against the expected criteria, notifying if they are not met.
-
-### Ding
-Notifications are sent through Slack using a web-hook. Here's an example message that you could see in your Slack channel:
+When a response doesn't meet expectations, a notification is sent through Slack using a web-hook. Here's an example message that you could see in your Slack channel:
 
 **Example RESPONSE_TIME Failure**<br>
 *Response took longer than 30ms*<br>
@@ -37,7 +32,9 @@ Notifications are sent through Slack using a web-hook. Here's an example message
 <br>
 
 
-## Installation
+## Setup
+
+### Installation
 Requires [Node.js](https://nodejs.org/en/download/) (14+) and npm (6+)
 
 Clone the repository
@@ -51,10 +48,15 @@ $ cd ping-and-ding
 $ npm install
 ```
 
-<br>
+### Usage
+By default the script will look for a `config.json` in the same directory as itself and will log results to `output/`, but this can be overridden with the optional command line arguments.
 
+Run the script and exit.
+```
+node ping-and-ding.js [config_file] [output_dir]
+```
 
-## Setup
+To run the script repeatedly you should use `cron` or some equivalent to ensure that it will keep working even after the machine restarts (see [Cron](#cron) section below).
 
 ### Slack
 To receive notifications we need to set up a [Slack web-hook](https://slack.com/help/articles/115005265063-Incoming-webhooks-for-Slack). The steps are as follows:
@@ -65,7 +67,7 @@ To receive notifications we need to set up a [Slack web-hook](https://slack.com/
 
 1.  Choose a channel to receive the notifications. Copy the webhook URL from the bottom of the "Incoming Webhooks" page. Paste this into your config file as the notifier url.
 
-To send a test notification, edit a target in the config file to expect something that won't happen, such as `status: 0` and run the script. You should receive a notification in the Slack channel you chose.
+To send a test notification, edit a target in the config file to expect something that won't happen, such as `"status": 0` and run the script. You should receive a notification in the Slack channel you chose.
 
 ### Cron
 To call the script on a schedule we can use `cron`. This is the standard task scheduling utility on Linux systems, but equivalent tools exist for Windows.
@@ -79,25 +81,12 @@ Add the following line, substituting your path to `ping-and-ding.js`.
 ```
 * * * * * node /your/path/to/ping-and-ding.js
 ```
-This will call the script each minute. For help building cron schedule expressions check out [this site](https://crontab.guru/).
+This will call the script each minute. To stop, comment or remove the line. For help building cron schedule expressions check out [this site](https://crontab.guru/).
 
-Example cron schedule expressions
+Example cron schedule expressions:
 * `*/5 * * * *` (every 5 minutes)
 * `0,10,20,30,40,50 * * * *` (every 10 minutes)
 * `0 * * * *` (every hour)
-
-<br>
-
-
-## Usage
-By default the script will look for a `config.json` in the same directory as itself and will log results to `output/`, but this can be overridden with the optional command line arguments.
-
-Run the script and exit.
-```
-node ping-and-ding.js [config_file] [output_dir]
-```
-
-To run the script repeatedly you should use `cron` or some equivalent that calls the script on a schedule to ensure that it will keep working even after the machine restarts.
 
 <br>
 
@@ -117,7 +106,7 @@ The config is a JSON file with the following top level structure:
   * `method` - request method such as `GET`, `POST`, etc
   * `headers` - request headers, an object of header key value pairs
   * `body` - request content, objects are automatically stringified
-* `expect` - criteria to check in the response
+* `expect` - attributes to check in the response
   * `status` - expected response code (fail as STATUS)
   * `headers` - expected headers, an object of header key value pairs, to only check if the header exists use `""` as the value (fail as HEADERS)
   * `responseTime` - expected response time in ms (fail as RESPONSE_TIME)
@@ -160,7 +149,7 @@ The following example config will send a `GET` request to `example.com` and expe
 
 
 ## Results
-Besides the terminal output and the notifications, various results are also logged in the `outputs/` directory.
+Besides the terminal output and the notifications, various results are also logged in the `output/` directory.
 
 ### Data
 The `data/` directory holds a CSV file for each target, named `YYYY-MM-<name>.csv` where `<name>` is the unique target name.
@@ -177,21 +166,21 @@ Each line is a single log entry with the following information:
 * Timestamp - `[YYYY-MM-DDTHH:mm:ss.sssZ]` (simplified extended ISO format)
 * Level - One of the following tags
   * `[INFO]` - General information
-  * `[WARN]` - Monitored site has an issue (response doesn't meet expected criteria)
+  * `[WARN]` - Monitored site has an issue (response doesn't meet expectations)
   * `[ERROR]` - Script has an issue (cause for concern)
 * Message - Either a short string or a JSON object with additional information
 
-Example log entry
+Example log entry:
 ```
 [2022-06-02T22:44:31.738Z][INFO] Responded 200 OK after 141ms
 ```
 
 ### Warns
-The `warns/` directory has a log file for each day a response doesn't meet expected criteria, named `YYYY-MM-DD-ping-and-ding-warn.log`.
+The `warns/` directory has a log file for each day a response doesn't meet expectations, named `YYYY-MM-DD-ping-and-ding-warn.log`.
 
 Each line has a JSON object describing the offending request, response, and failure reason. `STATUS` failure includes a `body` field (limited in length by `truncateBody`). `HEADERS` failure includes a `headers` field listing all the headers on the response.
 
-Example warn entry, after being formatted for readability
+Example warn entry, after being formatted for readability:
 ```
 {
   "name": "Example",
