@@ -103,7 +103,7 @@ The config is a JSON file with the following top level structure:
   * `body` - request content, objects are automatically stringified
 * `expect` - attributes to check in the response
   * `status` - expected response code (fail as `STATUS`)
-  * `headers` - expected headers, an object of header key value pairs, to only check if the header exists use `""` as the value (fail as `HEADERS`)
+  * `headers` - expected headers, an object of header key value pairs, to only check if the header exists use `""` as the value (fail as `HEADER`)
   * `responseTime` - expected response time in ms (fail as `RESPONSE_TIME`)
 * `responseTimeRetries` - only notify `RESPONSE_TIME` failure after this many consecutive retries are all too slow
 * `timeout` - abort the request after waiting this many ms for a response (fail as `TIMEOUT`)
@@ -119,8 +119,8 @@ The config is a JSON file with the following top level structure:
 Default values are used for optional fields that individual objects don't specify.
 * `target` - default target object
 
-### Example
-The following example config will send a `GET` request to `example.com` and expects a response code of `200 OK` within `300ms`. If these conditions are not met, or no response is received in `1000ms`, a notification will be sent to the provided Slack webhook url.
+### Config Example
+The following config will send a `GET` request to `example.com` and expects a response code of `200 OK` within `300ms`. If these conditions are not met, or no response is received in `1000ms`, a notification will be sent to the provided Slack webhook url.
 ```
 {
   "targets": [

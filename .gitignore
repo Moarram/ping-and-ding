@@ -3,4 +3,5 @@ package-lock.json
 
 local/
 output/
+config.json
 state.json

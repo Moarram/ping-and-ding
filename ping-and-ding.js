@@ -34,7 +34,7 @@ config.json
 // Result failure types in order of precedence:
 //  TIMEOUT - no response in time
 //  STATUS - response had incorrect status code
-//  HEADERS - response missing header, or incorrect value
+//  HEADER - response missing header, or incorrect value
 //  RESPONSE_TIME - response was slow
 
 // =============================================================================
