@@ -22,7 +22,7 @@ config.json
     }
   ],
   "notifier": {
-    "url": <str>, // slack web-hook
+    "url": <str>, // Slack webhook
     "timeout": <num> // ms
   },
   "defaults": {
@@ -329,7 +329,7 @@ for (let filepath of [LOG_FILEPATH, WARN_FILEPATH, DATA_FILEPATH]) {
 
 const CONFIG = await readJSON(CONFIG_FILEPATH)
 try {
-  if (!CONFIG || typeof CONFIG !== 'object') throw 'Config must be an object'
+  if (!CONFIG || typeof CONFIG !== 'object') throw 'Config missing'
   if (!('targets' in CONFIG || Array.isArray(CONFIG.targets))) throw 'Config must have "targets" array'
   const usedNames = new Set()
   CONFIG.targets.forEach(target => {

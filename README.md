@@ -15,19 +15,17 @@
 
 
 ## Overview
-Ping and Ding has two main tasks:
-1. Ping (request an HTTP resource)
-1. Ding (notify if response doesn't meet expectations)
+Ping and Ding does two main tasks:
+* Ping (request an HTTP resource)
+* Ding (notify if response doesn't meet expectations)
 
-The `config.json` file specifies targets: each being a resource to request with expected response attributes (status, headers, and response time).
+When a response doesn't meet expectations, a notification is sent through Slack using a webhook. Here's an example message that you could see in your Slack channel:
 
-When a response doesn't meet expectations, a notification is sent through Slack using a web-hook. Here's an example message that you could see in your Slack channel:
-
-**Example RESPONSE_TIME Failure**<br>
-*Response took longer than 30ms*<br>
-> URL: **http://example.com**<br>
-> Status: **200**<br>
-> Response time: **51ms**
+> **Example RESPONSE_TIME Failure**<br>
+> *Response took longer than 30ms*<br>
+> > URL: **http://example.com**<br>
+> > Status: **200**<br>
+> > Response time: **51ms**
 
 <br>
 
@@ -49,6 +47,8 @@ $ npm install
 ```
 
 ### Usage
+Create a config file to specify targets (see [Config](#config) section below)
+
 By default the script will look for a `config.json` in the same directory as itself and will log results to `output/`, but this can be overridden with the optional command line arguments.
 
 Run the script and exit.
@@ -59,13 +59,13 @@ node ping-and-ding.js [config_file] [output_dir]
 To run the script repeatedly you should use `cron` or some equivalent to ensure that it will keep working even after the machine restarts (see [Cron](#cron) section below).
 
 ### Slack
-To receive notifications we need to set up a [Slack web-hook](https://slack.com/help/articles/115005265063-Incoming-webhooks-for-Slack). The steps are as follows:
+To receive notifications we need to set up a [Slack webhook](https://slack.com/help/articles/115005265063-Incoming-webhooks-for-Slack). The steps are as follows:
 
-1.  First, [create a new Slack app](https://api.slack.com/apps/new). Choose to create "from scratch" when prompted. Name the app and choose a workspace, then click "Create App".
+1.  [Create a new Slack app](https://api.slack.com/apps/new). Choose to create "from scratch" when prompted. Name the app and choose a workspace, then click "Create App".
 
-1.  Under "Add features and functionality", choose "Incoming Webhooks" and toggle "Activate Incoming Webhooks" on. Scroll down and click "Add New Webhook to Workspace".
+1.  Create a webhook. Under "Add features and functionality", choose "Incoming Webhooks" and toggle "Activate Incoming Webhooks" on. Scroll down and click "Add New Webhook to Workspace". Choose a channel to receive the notifications.
 
-1.  Choose a channel to receive the notifications. Copy the webhook URL from the bottom of the "Incoming Webhooks" page. Paste this into your config file as the notifier url.
+1.  Copy the webhook URL from the bottom of the "Incoming Webhooks" page and paste this into your config file as the notifier url.
 
 To send a test notification, edit a target in the config file to expect something that won't happen, such as `"status": 0` and run the script. You should receive a notification in the Slack channel you chose.
 
@@ -82,11 +82,6 @@ Add the following line, substituting your path to `ping-and-ding.js`.
 * * * * * node /your/path/to/ping-and-ding.js
 ```
 This will call the script each minute. To stop, comment or remove the line. For help building cron schedule expressions check out [this site](https://crontab.guru/).
-
-Example cron schedule expressions:
-* `*/5 * * * *` (every 5 minutes)
-* `0,10,20,30,40,50 * * * *` (every 10 minutes)
-* `0 * * * *` (every hour)
 
 <br>
 
@@ -107,25 +102,25 @@ The config is a JSON file with the following top level structure:
   * `headers` - request headers, an object of header key value pairs
   * `body` - request content, objects are automatically stringified
 * `expect` - attributes to check in the response
-  * `status` - expected response code (fail as STATUS)
-  * `headers` - expected headers, an object of header key value pairs, to only check if the header exists use `""` as the value (fail as HEADERS)
-  * `responseTime` - expected response time in ms (fail as RESPONSE_TIME)
-* `responseTimeRetries` - only notify RESPONSE_TIME failure after this many consecutive retries are all too slow
-* `timeout` - abort the request after waiting this many ms for a response (fail as TIMEOUT)
-* `truncateBody` - after STATUS failure the logged response body is shortened to this many chars
+  * `status` - expected response code (fail as `STATUS`)
+  * `headers` - expected headers, an object of header key value pairs, to only check if the header exists use `""` as the value (fail as `HEADERS`)
+  * `responseTime` - expected response time in ms (fail as `RESPONSE_TIME`)
+* `responseTimeRetries` - only notify `RESPONSE_TIME` failure after this many consecutive retries are all too slow
+* `timeout` - abort the request after waiting this many ms for a response (fail as `TIMEOUT`)
+* `truncateBody` - after `STATUS` failure the logged response body is shortened to this many chars
 * `notifierCooldownMins` - max notification rate for this target in minutes
 
 ### Notifier
-*Ding!* The notification is sent by posting to your Slack web-hook. I may add more notification methods in the future.
-* `url` - Slack web-hook to send notification **(required)**
+*Ding!* The notification is sent by posting to your Slack webhook. I may add more notification methods in the future.
+* `url` - Slack webhook to send notification **(required)**
 * `timeout` - abort the notification attempt after waiting this many ms for response
 
 ### Default
-Default values are used for fields that individual objects don't specify.
+Default values are used for optional fields that individual objects don't specify.
 * `target` - default target object
 
 ### Example
-The following example config will send a `GET` request to `example.com` and expects a response code of `200 OK` within `300ms`. If these conditions are not met, or no response is received in `1000ms`, a notification will be sent to the provided Slack web-hook url.
+The following example config will send a `GET` request to `example.com` and expects a response code of `200 OK` within `300ms`. If these conditions are not met, or no response is received in `1000ms`, a notification will be sent to the provided Slack webhook url.
 ```
 {
   "targets": [
@@ -149,10 +144,14 @@ The following example config will send a `GET` request to `example.com` and expe
 
 
 ## Results
-Besides the terminal output and the notifications, various results are also logged in the `output/` directory.
+Besides the terminal output and notifications, various results are also logged in the `output/` directory.
+* `output/`
+  * `data/`
+  * `logs/`
+  * `warns/`
 
 ### Data
-The `data/` directory holds a CSV file for each target, named `YYYY-MM-<name>.csv` where `<name>` is the unique target name.
+The `data/` directory holds a CSV file for each target each month, named `YYYY-MM-<name>.csv` where `<name>` is the unique target name.
 
 The CSV file has the following columns:
 * Timestamp - `YYYY-MM-DDTHH:mm:ss.sssZ` (simplified extended ISO format)
