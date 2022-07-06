@@ -1,15 +1,9 @@
 # Ping and Ding
 *A simple monitor for websites and endpoints*
 
-## Contents
-* [Overview](#overview)
-* [Setup](#setup)
-  * [Installation](#installation)
-  * [Usage](#usage)
-  * [Slack](#slack)
-  * [Cron](#cron)
-* [Config](#config)
-* [Results](#results)
+Lets say you have a website (or API endpoint) and want to make sure it's online, and be notified immediately when it isn't. The services involved in your backend stack may say they are working, but the only way to know for sure is to send a request from the outside. Does the response have the correct status code and headers? Is it timely?
+
+There are plenty of paid services that can do this (and much more), but if you want a simple solution that's free and self hosted, look no further than Ping and Ding.
 
 <br>
 
@@ -87,7 +81,7 @@ This will call the script each minute. To stop, comment or remove the line. For 
 
 
 ## Config
-The config is a JSON file with the following top level structure:
+The config is a JSON file (see `config.example.json`) with the following top level structure:
 * `targets` - array of targets **(required)**
 * `notifier` - notification method **(required)**
 * `default` - settings shared across targets
@@ -177,7 +171,7 @@ Example log entry:
 ### Warns
 The `warns/` directory has a log file for each day a response doesn't meet expectations, named `YYYY-MM-DD-ping-and-ding-warn.log`.
 
-Each line has a JSON object describing the offending request, response, and failure reason. `STATUS` failure includes a `body` field (limited in length by `truncateBody`). `HEADERS` failure includes a `headers` field listing all the headers on the response.
+Each line has a JSON object describing the offending request, response, and failure reason. `STATUS` failure includes a `body` field (limited in length by `truncateBody`). `HEADER` failure includes a `headers` field listing all the headers on the response.
 
 Example warn entry, after being formatted for readability:
 ```
