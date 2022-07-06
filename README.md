@@ -3,7 +3,7 @@
 
 Lets say you have a website (or API endpoint) and want to make sure it's online, and be notified immediately when it isn't. The services involved in your backend stack may say they are working, but the only way to know for sure is to send a request from the outside. Does the response have the correct status code and headers? Is it timely?
 
-There are plenty of paid services that can do this (and much more), but if you want a simple solution that's free and self hosted, look no further than Ping and Ding.
+Although there are plenty of paid services that can do this, Ping and Ding is perfect if you want something free, simple, and self hosted.
 
 <br>
 
@@ -83,7 +83,7 @@ This will call the script each minute. To stop, comment or remove the line. For 
 ## Config
 The config is a JSON file (see `config.example.json`) with the following top level structure:
 * `targets` - array of targets **(required)**
-* `notifier` - notification method **(required)**
+* `notifier` - notification method
 * `default` - settings shared across targets
 
 ### Target
@@ -105,7 +105,7 @@ The config is a JSON file (see `config.example.json`) with the following top lev
 * `notifierCooldownMins` - max notification rate for this target in minutes
 
 ### Notifier
-*Ding!* The notification is sent by posting to your Slack webhook. I may add more notification methods in the future.
+*Ding!* The notification is sent by posting to your Slack webhook. If the `notifier` field is missing or empty, notifications won't be attempted. I may add more notification methods in the future.
 * `url` - Slack webhook to send notification **(required)**
 * `timeout` - abort the notification attempt after waiting this many ms for response
 

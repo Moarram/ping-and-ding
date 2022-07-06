@@ -83,11 +83,11 @@ const LOGGER = {
 // -----------------------------------------------------------------------------
 
 // add contents of src to dest, optionally overwriting existing values
-function mergeObj(dest, src, { overwrite=false }={}) {
+function mergeObj(dest, src) {
   Object.entries(src).forEach(([key, val]) => {
     if (val && typeof val === 'object' && key in dest) {
-      mergeObj(dest[key], val, { overwrite })
-    } else if (!(key in dest) || overwrite) {
+      mergeObj(dest[key], val)
+    } else if (!(key in dest)) {
       dest[key] = val
     }
   })
@@ -167,7 +167,7 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
   expect = { status: 200, headers: {}, responseTime: 500, ...expect } // defaults
 
   const result = { name, url, timestamp: null, status: null, responseTime: null }
-  
+
   let failed = false
   const fail = ({ type, description, ...rest }) => {
     LOGGER.warn(`${type}: ${description}`)
@@ -178,7 +178,7 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
   const controller = new AbortController()
   const signal = controller.signal
   const abortTimeout = setTimeout(() => controller.abort(), timeout)
-  
+
   try {
     if ('body' in init && typeof init.body === 'object') {
       init.body = JSON.stringify(init.body)
@@ -189,7 +189,7 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
     const t1 = Date.now()
     const response = await fetch(url, { ...init, signal })
     const t2 = Date.now()
-    
+
     LOGGER.log(`Responded ${response.status} ${response.statusText} after ${t2 - t1}ms`)
     result.status = response.status
     result.responseTime = t2 - t1
@@ -245,19 +245,19 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
 
 async function notify(target, result) {
   if (!CONFIG.notifier) return
-  
+
   const notifier = { ...CONFIG.notifier }
 
-  const prev = Date.parse(STATE.lastNotificationTime[target.url]) || 0
+  const prev = Date.parse(STATE.lastNotificationTime[target.name]) || 0
   const elapsed = Date.now() - prev
   const cooldown = target.notifierCooldownMins || 0
 
   if (elapsed >= cooldown * 60 * 1000) {
     LOGGER.log(`Sending notification...`)
-    
+
     try {
       await notifySlack(result, notifier)
-      STATE.lastNotificationTime[target.url] = new Date().toISOString()
+      STATE.lastNotificationTime[target.name] = new Date().toISOString()
       LOGGER.log('Notification sent')
 
     } catch (err) {
@@ -339,7 +339,6 @@ try {
     if (usedNames.has(target.name)) throw `Target name "${target.name}" not unique`
     usedNames.add(target.name)
   })
-  if (!('notifier' in CONFIG)) throw 'Must have "notifier" object'
   if ('notifier' in CONFIG && !('url' in CONFIG.notifier)) throw 'Notifier must have a "url" string'
 } catch (err) {
   LOGGER.error(`INVALID CONFIG! ${err}`)
@@ -376,12 +375,6 @@ if ('notifier' in CONFIG) {
   mergeObj(CONFIG.notifier, notifierConfig)
   mergeObj(CONFIG.notifier, DEFAULTS.notifier)
 }
-// if ('notifiers' in CONFIG) {
-//   for (let notifier of CONFIG.notifiers) {
-//     mergeObj(notifier, notifierConfig)
-//     mergeObj(notifier, DEFAULTS.notifier)
-//   }
-// }
 
 // -----------------------------------------------------------------------------
 
@@ -394,7 +387,7 @@ const STATE = { lastNotificationTime: {}, ...lastState }
 for (let target of CONFIG.targets) {
   let result = await poke(target)
   await writeData(target.name, result)
-  
+
   if ('failure' in result) {
     await writeWarn(result)
 
@@ -424,7 +417,7 @@ for (let target of CONFIG.targets) {
       if (target.responseTimeRetries && responseTimeFailures > target.responseTimeRetries) {
         await notify(target, result)
       }
-      
+
     } else {
       await notify(target, result)
     }
