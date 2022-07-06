@@ -38,6 +38,7 @@ config.json
 //  RESPONSE_TIME - response was slow
 
 // =============================================================================
+// Imports
 
 import fetch from 'node-fetch'
 import * as fs from 'node:fs/promises'
@@ -46,6 +47,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 // =============================================================================
+// Constants
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -64,23 +66,7 @@ const STATE_FILEPATH = path.resolve(__dirname, 'state.json')
 const CONFIG_FILEPATH = path.resolve(__dirname, configFilepath)
 
 // =============================================================================
-
-const LOGGER = {
-  buffer: '',
-  log(msg, { tag='INFO', timestamp=null, color=null }={}) {
-    const text = `[${timestamp || new Date().toISOString()}][${tag}] ${msg}`
-    console.log(color ? `\x1b[${color}m${text}\x1b[0m` : text)
-    this.buffer += `${text}\n`
-  },
-  warn(msg) { this.log(msg, { tag: 'WARN', color: 33 }) },
-  error(msg) { this.log(msg, { tag: 'ERROR', color: 31 }) },
-  async flush() {
-    await write(LOG_FILEPATH, this.buffer)
-    this.buffer = ''
-  },
-}
-
-// -----------------------------------------------------------------------------
+// Functions (no global refs)
 
 // add contents of src to dest, optionally overwriting existing values
 function mergeObj(dest, src) {
@@ -95,14 +81,16 @@ function mergeObj(dest, src) {
 
 // -----------------------------------------------------------------------------
 
-async function ensureDir(dirpath) {
+// create all directories from dirpath that are missing
+async function ensureDir(dirpath, { logger=console }={}) {
   try {
     await fs.mkdir(dirpath, { recursive: true })
   } catch (err) {
-    LOGGER.error(err.message)
+    logger.error(err.message)
   }
 }
 
+// check if a filepath exists
 async function exists(filepath) {
   try {
     await fs.access(filepath)
@@ -112,65 +100,50 @@ async function exists(filepath) {
   }
 }
 
-async function read(filepath) {
+// read data from filepath, logging an error if failed
+async function read(filepath, { logger=console }={}) {
   try {
     return await fs.readFile(filepath, { encoding: 'utf-8' })
   } catch (err) {
-    LOGGER.error(`Failed to read "${path.parse(filepath).base}"`)
-    LOGGER.error(err.message)
+    logger.error(`Failed to read "${path.parse(filepath).base}"`)
+    logger.error(err.message)
     return null
   }
 }
 
-async function write(filepath, data, flag='a') {
-  try {
-    await fs.writeFile(filepath, data, { flag, encoding: 'utf-8' })
-  } catch (err) {
-    LOGGER.error(`Failed to write "${path.parse(filepath).base}"`)
-    LOGGER.error(err.message)
-  }
-}
-
-// -----------------------------------------------------------------------------
-
-async function readJSON(filepath) {
-  const data = await read(filepath)
+// read JSON from filepath, logging an error if failed
+async function readJSON(filepath, { logger=console }={}) {
+  const data = await read(filepath, logger)
   try {
     return JSON.parse(data)
   } catch (err) {
-    LOGGER.error(`Failed to parse "${path.parse(filepath).base}"`)
-    LOGGER.error(err.message)
+    logger.error(`Failed to parse "${path.parse(filepath).base}"`)
+    logger.error(err.message)
     return null
   }
 }
 
-async function writeData(name, result) {
-  const filepath = DATA_FILEPATH.replace('[name]', name)
-  const line = [
-    result.timestamp,
-    result.responseTime || -1,
-    result.status || 0,
-  ]
-  if (!(await exists(filepath))) {
-    await write(filepath, '"Timestamp","Response Time","Status Code"\n')
+// write data to filepath, logging an error if failed
+async function write(filepath, data, { flag='a', logger=console }={}) {
+  try {
+    await fs.writeFile(filepath, data, { flag, encoding: 'utf-8' })
+  } catch (err) {
+    logger.error(`Failed to write "${path.parse(filepath).base}"`)
+    logger.error(err.message)
   }
-  await write(filepath, `${line.join(',')}\n`)
-}
-
-async function writeWarn(result) {
-  await write(WARN_FILEPATH, `${JSON.stringify(result)}\n`)
 }
 
 // -----------------------------------------------------------------------------
 
-async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=null }) {
+// request a resource with expectations and return details about response
+async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=null, logger=console }) {
   expect = { status: 200, headers: {}, responseTime: 500, ...expect } // defaults
 
   const result = { name, url, timestamp: null, status: null, responseTime: null }
 
   let failed = false
   const fail = ({ type, description, ...rest }) => {
-    LOGGER.warn(`${type}: ${description}`)
+    logger.warn(`${type}: ${description}`)
     result.failure = { type, description, ...rest }
     failed = true
   }
@@ -184,13 +157,13 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
       init.body = JSON.stringify(init.body)
     }
 
-    LOGGER.log(`Requesting "${url}"`)
+    logger.log(`Requesting "${url}"`)
     result.timestamp = new Date().toISOString()
     const t1 = Date.now()
     const response = await fetch(url, { ...init, signal })
     const t2 = Date.now()
 
-    LOGGER.log(`Responded ${response.status} ${response.statusText} after ${t2 - t1}ms`)
+    logger.log(`Responded ${response.status} ${response.statusText} after ${t2 - t1}ms`)
     result.status = response.status
     result.responseTime = t2 - t1
 
@@ -228,12 +201,12 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
       })
 
     } else {
-      LOGGER.error(err.message)
+      logger.error(err.message)
     }
 
   } finally {
     if ('failure' in result) {
-      LOGGER.warn(JSON.stringify(result))
+      logger.warn(JSON.stringify(result))
     }
 
     clearTimeout(abortTimeout)
@@ -243,33 +216,19 @@ async function poke({ name, url, init={}, expect={}, timeout=5000, truncateBody=
 
 // -----------------------------------------------------------------------------
 
-async function notify(target, result) {
-  if (!CONFIG.notifier) return
+// notify notifier of result (from poke function)
+async function notify({ result, notifier, logger=console }) {
+  try {
+    await notifySlack(result, notifier)
+    logger.log('Notification sent')
 
-  const notifier = { ...CONFIG.notifier }
-
-  const prev = Date.parse(STATE.lastNotificationTime[target.name]) || 0
-  const elapsed = Date.now() - prev
-  const cooldown = target.notifierCooldownMins || 0
-
-  if (elapsed >= cooldown * 60 * 1000) {
-    LOGGER.log(`Sending notification...`)
-
-    try {
-      await notifySlack(result, notifier)
-      STATE.lastNotificationTime[target.name] = new Date().toISOString()
-      LOGGER.log('Notification sent')
-
-    } catch (err) {
-      LOGGER.error('Failed to send notification')
-      LOGGER.error(err.message)
-    }
-
-  } else {
-    LOGGER.log(`Suppressing notification`)
+  } catch (err) {
+    logger.error('Failed to send notification')
+    logger.error(err.message)
   }
 }
 
+// notify slack of result (from poke function)
 async function notifySlack(result, { url, timeout }) {
   const controller = new AbortController()
   const signal = controller.signal
@@ -320,31 +279,104 @@ async function notifySlack(result, { url, timeout }) {
 }
 
 // =============================================================================
+// Functions (with global refs)
 
-for (let filepath of [LOG_FILEPATH, WARN_FILEPATH, DATA_FILEPATH]) {
-  await ensureDir(path.parse(filepath).dir)
+// log colored message to console and unstyled message to file
+const LOGGER = {
+  buffer: '',
+  log(msg, { tag='INFO', timestamp=null, color=null }={}) {
+    const text = `[${timestamp || new Date().toISOString()}][${tag}] ${msg}`
+    console.log(color ? `\x1b[${color}m${text}\x1b[0m` : text)
+    this.buffer += `${text}\n`
+  },
+  warn(msg) { this.log(msg, { tag: 'WARN', color: 33 }) },
+  error(msg) { this.log(msg, { tag: 'ERROR', color: 31 }) },
+  async flush() {
+    await write(LOG_FILEPATH, this.buffer)
+    this.buffer = ''
+  },
 }
 
 // -----------------------------------------------------------------------------
 
-const CONFIG = await readJSON(CONFIG_FILEPATH)
-try {
-  if (!CONFIG || typeof CONFIG !== 'object') throw 'Config missing'
-  if (!('targets' in CONFIG || Array.isArray(CONFIG.targets))) throw 'Config must have "targets" array'
-  const usedNames = new Set()
-  CONFIG.targets.forEach(target => {
-    if (typeof target !== 'object') throw 'Each target must be an object'
-    if (!('name' in target && typeof target.name === 'string')) throw 'Each target must have a unique "name" string'
-    if (!('url' in target && typeof target.url === 'string')) throw 'Each target must have a "url" string'
-    if (usedNames.has(target.name)) throw `Target name "${target.name}" not unique`
-    usedNames.add(target.name)
-  })
-  if ('notifier' in CONFIG && !('url' in CONFIG.notifier)) throw 'Notifier must have a "url" string'
-} catch (err) {
-  LOGGER.error(`INVALID CONFIG! ${err}`)
-  await LOGGER.flush()
-  process.exit(1)
+// poke a target
+async function ping(target) {
+  return await poke({ ...target, logger: LOGGER})
 }
+
+// notify of result for target
+async function ding(target, result) {
+  if (!CONFIG.notifier) return
+
+  const prev = Date.parse(STATE.lastNotificationTime[target.name]) || 0
+  const elapsed = Date.now() - prev
+  const cooldown = target.notifierCooldownMins || 0
+
+  if (elapsed >= cooldown * 60 * 1000) {
+    LOGGER.log(`Sending notification...`)
+    const success = await notify({ result, notifier: CONFIG.notifier, logger: LOGGER })
+    if (success) STATE.lastNotificationTime[target.name] = new Date().toISOString()
+
+  } else {
+    LOGGER.log(`Suppressing notification`)
+  }
+}
+
+// read ping-and-ding config from filepath, logging error if invalid
+async function readConfig(filepath) {
+  const config = await readJSON(filepath, { logger: LOGGER })
+  try {
+    if (!config || typeof config !== 'object') throw 'Config missing'
+    if (!('targets' in config || Array.isArray(config.targets))) throw 'Config must have "targets" array'
+    const usedNames = new Set()
+    config.targets.forEach(target => {
+      if (typeof target !== 'object') throw 'Each target must be an object'
+      if (!('name' in target && typeof target.name === 'string')) throw 'Each target must have a unique "name" string'
+      if (!('url' in target && typeof target.url === 'string')) throw 'Each target must have a "url" string'
+      if (usedNames.has(target.name)) throw `Target name "${target.name}" not unique`
+      usedNames.add(target.name)
+    })
+    if ('notifier' in config && !('url' in config.notifier)) throw 'Notifier must have a "url" string'
+    return config
+  } catch (err) {
+    LOGGER.error(`INVALID CONFIG! ${err}`)
+    await LOGGER.flush()
+    return null
+  }
+}
+
+// write ping-and-ding result timestamp, response time, and status code to file
+async function writeData(name, result) {
+  const filepath = DATA_FILEPATH.replace('[name]', name)
+  const line = [
+    result.timestamp,
+    result.responseTime || -1,
+    result.status || 0,
+  ]
+  if (!(await exists(filepath))) {
+    await write(filepath, '"Timestamp","Response Time","Status Code"\n', { logger: LOGGER })
+  }
+  await write(filepath, `${line.join(',')}\n`, { logger: LOGGER })
+}
+
+// write ping-and-ding failure result to file
+async function writeWarn(result) {
+  await write(WARN_FILEPATH, `${JSON.stringify(result)}\n`, { logger: LOGGER })
+}
+
+// =============================================================================
+// Main
+
+// create missing directories
+for (let filepath of [LOG_FILEPATH, WARN_FILEPATH, DATA_FILEPATH]) {
+  await ensureDir(path.parse(filepath).dir, { logger: LOGGER })
+}
+
+// -----------------------------------------------------------------------------
+
+// read config from file
+const CONFIG = await readConfig(CONFIG_FILEPATH)
+if (!CONFIG) process.exit(1)
 
 const DEFAULTS = {
   target: {
@@ -364,39 +396,44 @@ const DEFAULTS = {
   },
 }
 
-// Apply defaults to config
-const targetConfig = CONFIG?.defaults?.target || {}
+// apply defaults to config
+const configDefaultTarget = CONFIG?.defaults?.target || {}
 for (let target of CONFIG.targets) {
-  mergeObj(target, targetConfig)
+  mergeObj(target, configDefaultTarget)
   mergeObj(target, DEFAULTS.target)
 }
-const notifierConfig = CONFIG?.defaults?.notifier || {}
+const configDefaultNotifier = CONFIG?.defaults?.notifier || {}
 if ('notifier' in CONFIG) {
-  mergeObj(CONFIG.notifier, notifierConfig)
+  mergeObj(CONFIG.notifier, configDefaultNotifier)
   mergeObj(CONFIG.notifier, DEFAULTS.notifier)
 }
 
 // -----------------------------------------------------------------------------
 
+// read previous state from file
 let lastState = {}
 if (await exists(STATE_FILEPATH)) {
-  lastState = await readJSON(STATE_FILEPATH)
+  lastState = await readJSON(STATE_FILEPATH, { logger: LOGGER })
 }
 const STATE = { lastNotificationTime: {}, ...lastState }
 
+// -----------------------------------------------------------------------------
+
+// ping and ding each target
 for (let target of CONFIG.targets) {
-  let result = await poke(target)
+  let result = await ping(target)
   await writeData(target.name, result)
 
   if ('failure' in result) {
     await writeWarn(result)
 
+    // special case, try again for response time
     if (result.failure.type === 'RESPONSE_TIME' && target.responseTimeRetries) {
       LOGGER.log(`Retrying ${target.responseTimeRetries} times...`)
       let responseTimeFailures = 1
 
       for (let i = 0; i < target.responseTimeRetries; i++) {
-        result = await poke(target)
+        result = await ping(target)
         await writeData(target.name, result)
 
         if ('failure' in result) {
@@ -405,7 +442,7 @@ for (let target of CONFIG.targets) {
           if (result.failure.type === 'RESPONSE_TIME' && target.responseTimeRetries) {
             responseTimeFailures += 1
           } else {
-            await notify(target, result)
+            await ding(target, result)
             break
           }
 
@@ -415,15 +452,16 @@ for (let target of CONFIG.targets) {
       }
 
       if (target.responseTimeRetries && responseTimeFailures > target.responseTimeRetries) {
-        await notify(target, result)
+        await ding(target, result)
       }
 
     } else {
-      await notify(target, result)
+      await ding(target, result)
     }
   }
   await LOGGER.flush()
 }
 
-await write(STATE_FILEPATH, JSON.stringify(STATE), 'w')
+// cleanup
+await write(STATE_FILEPATH, JSON.stringify(STATE), { flag: 'w', logger: LOGGER })
 await LOGGER.flush()
